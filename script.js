@@ -2243,3 +2243,339 @@ function showBookingSuccessMessage(){
         alert('Your request was submitted successfully.');
     }
 }
+/* =========================================================
+   FINAL MOBILE FIX SCRIPT
+   Duplicates mobile-only slider content after dynamic sections render.
+   ========================================================= */
+(function(){
+  function duplicateForMobileSlider(selector){
+    var el = document.querySelector(selector);
+    if(!el || el.dataset.mobileDuplicated === 'true') return;
+    var children = Array.prototype.slice.call(el.children);
+    if(children.length === 0) return;
+    children.forEach(function(child){
+      var clone = child.cloneNode(true);
+      clone.setAttribute('aria-hidden','true');
+      el.appendChild(clone);
+    });
+    el.dataset.mobileDuplicated = 'true';
+    el.classList.add('mobile-auto-slider');
+  }
+  function fixMobileSliders(){
+    if(window.matchMedia('(max-width: 768px)').matches){
+      duplicateForMobileSlider('.video-grid-ultra');
+      duplicateForMobileSlider('#servicesGrid');
+      duplicateForMobileSlider('#galleryGrid');
+    }
+  }
+  function closeMobileMenuOnOutsideClick(){
+    var toggle = document.querySelector('.mobile-toggle');
+    var menu = document.querySelector('.nav-menu');
+    if(!toggle || !menu || toggle.dataset.outsideFix === 'true') return;
+    toggle.dataset.outsideFix = 'true';
+    document.addEventListener('click', function(e){
+      if(window.innerWidth > 991) return;
+      if(menu.classList.contains('active') && !menu.contains(e.target) && !toggle.contains(e.target)){
+        menu.classList.remove('active');
+        toggle.innerHTML = '<i class="fas fa-bars"></i>';
+      }
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      fixMobileSliders();
+      closeMobileMenuOnOutsideClick();
+    }, 500);
+  });
+  window.addEventListener('resize', function(){
+    clearTimeout(window.__geMobileFixTimer);
+    window.__geMobileFixTimer = setTimeout(fixMobileSliders, 250);
+  });
+})();
+
+
+/* ===== FINAL BOOKING + CONTACT SECTION FIX ===== */
+(function(){
+  function getValue(id, fallback){
+    const el = document.getElementById(id);
+    const value = el ? String(el.value || '').trim() : '';
+    return value || (fallback || 'Not provided');
+  }
+  function validMobile(value){ return /^\d{10}$/.test(String(value || '').trim()); }
+
+  window.sendBookingToWhatsApp = function(){
+    const name = getValue('bookingName','');
+    const mobile = getValue('bookingMobile','');
+    const city = getValue('bookingCity','');
+    const address = getValue('bookingAddress','');
+    if(!name || !mobile || !city || !address){
+      alert('Please fill Name, Mobile Number, Area / City and Full Address.');
+      return;
+    }
+    if(!validMobile(mobile)){
+      alert('Please enter a valid 10 digit mobile number.');
+      return;
+    }
+
+    const bookingId = 'GE-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
+    const lines = [
+      'New Website Booking Enquiry - GANAPATHI ENTERPRISES',
+      'Booking ID: ' + bookingId,
+      '',
+      'Customer Details',
+      'Name: ' + name,
+      'Mobile: ' + mobile,
+      'WhatsApp: ' + getValue('bookingWhatsapp','Same / Not provided'),
+      'Email: ' + getValue('bookingEmail','Not provided'),
+      'Preferred Contact: ' + getValue('bookingContactMode','Not selected'),
+      '',
+      'Property Details',
+      'Property Type: ' + getValue('bookingProperty','Not selected'),
+      'Property Status: ' + getValue('bookingStatus','Not selected'),
+      'Approx Area: ' + getValue('bookingArea','Not provided') + ' sq.ft',
+      'Main Requirement: ' + getValue('bookingVisitPurpose','Not selected'),
+      '',
+      'Preferred Visit',
+      'Date: ' + getValue('bookingDate','Not selected'),
+      'Time: ' + getValue('bookingTime','Not selected'),
+      '',
+      'Site Address',
+      'Area / City: ' + city,
+      'Pincode: ' + getValue('bookingPincode','Not provided'),
+      'Full Address: ' + address,
+      '',
+      'Message',
+      getValue('bookingMessage','No additional notes')
+    ];
+
+    const form = document.createElement('form');
+    form.action = 'https://formsubmit.co/santhosh@ganapathienterprises.in';
+    form.method = 'POST';
+    form.target = 'bookingMailFrame';
+    form.style.display = 'none';
+    const fields = {
+      '_subject': 'New Website Booking - ' + bookingId,
+      '_captcha': 'false',
+      '_template': 'table',
+      'Booking Details': lines.join('\n')
+    };
+    Object.keys(fields).forEach(function(key){
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = fields[key];
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    const waText = encodeURIComponent(lines.join('\n'));
+    window.open('https://wa.me/918489332785?text=' + waText, '_blank');
+    alert('Booking enquiry sent. Customer details will be available in email and WhatsApp.');
+  };
+
+  window.requestBookingCallback = function(){
+    window.sendBookingToWhatsApp();
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    const form = document.getElementById('contactForm');
+    if(form){
+      form.setAttribute('target','contactMailFrame');
+      form.addEventListener('submit', function(){
+        setTimeout(function(){
+          const msg = document.getElementById('formMessage');
+          if(msg){
+            msg.textContent = 'Enquiry sent successfully to santhosh@ganapathienterprises.in';
+            msg.className = 'form-message success';
+            msg.style.display = 'block';
+          }
+        }, 300);
+      }, true);
+    }
+  });
+})();
+
+/* ===== FINAL VIDEO SECTION FIX: DESKTOP + MOBILE PLAY ONE VIDEO, STOP OUTSIDE SECTION, THEN NEXT ===== */
+(function(){
+  var videoPlayers = [];
+  var videoCards = [];
+  var currentVideoIndex = 0;
+  var apiReady = false;
+  var sectionVisible = false;
+  var playersReadyCount = 0;
+  var userPausedInsideSection = false;
+
+  function makeYoutubeSrc(src){
+    var base = String(src || '').split('?')[0];
+    var params = new URLSearchParams(String(src || '').split('?')[1] || '');
+    params.set('enablejsapi', '1');
+    params.set('playsinline', '1');
+    params.set('rel', '0');
+    params.set('modestbranding', '1');
+    params.set('controls', '1');
+    try { params.set('origin', window.location.origin); } catch(e) {}
+    return base + '?' + params.toString();
+  }
+
+  function cleanVideoGrid(grid){
+    /* Remove duplicated mobile slider cards so desktop and mobile both use one real video list */
+    grid.querySelectorAll('.video-flip-card[aria-hidden="true"]').forEach(function(card){ card.remove(); });
+    grid.classList.remove('mobile-auto-slider');
+    grid.removeAttribute('data-mobile-duplicated');
+    grid.classList.add('ge-video-sequential');
+  }
+
+  function stopAllVideos(){
+    videoPlayers.forEach(function(player){
+      if(player && typeof player.pauseVideo === 'function'){
+        try { player.pauseVideo(); } catch(e) {}
+      }
+    });
+  }
+
+  function stopOtherVideos(activeIndex){
+    videoPlayers.forEach(function(player, i){
+      if(i !== activeIndex && player && typeof player.pauseVideo === 'function'){
+        try { player.pauseVideo(); } catch(e) {}
+      }
+    });
+  }
+
+  function setActiveVideo(index, shouldPlay){
+    if(!videoCards.length) return;
+    currentVideoIndex = (index + videoCards.length) % videoCards.length;
+
+    videoCards.forEach(function(card, i){
+      card.classList.toggle('ge-active-video', i === currentVideoIndex);
+    });
+
+    stopOtherVideos(currentVideoIndex);
+
+    var player = videoPlayers[currentVideoIndex];
+    if(shouldPlay && sectionVisible && player && typeof player.playVideo === 'function'){
+      try {
+        if(typeof player.mute === 'function') player.mute();
+        player.playVideo();
+      } catch(e) {}
+    }
+  }
+
+  function startCurrentVideo(){
+    if(!apiReady || !sectionVisible || !videoCards.length) return;
+    userPausedInsideSection = false;
+    setActiveVideo(currentVideoIndex, true);
+  }
+
+  function buildPlayers(){
+    var grid = document.querySelector('.video-grid-ultra');
+    if(!grid || !window.YT || !window.YT.Player) return;
+
+    cleanVideoGrid(grid);
+    videoCards = Array.prototype.slice.call(grid.querySelectorAll('.video-flip-card'));
+    videoPlayers = [];
+    playersReadyCount = 0;
+
+    videoCards.forEach(function(card, index){
+      var frame = card.querySelector('iframe');
+      if(!frame) return;
+
+      frame.id = frame.id || 'ge-video-player-' + index;
+      frame.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      frame.src = makeYoutubeSrc(frame.getAttribute('src'));
+
+      videoPlayers[index] = new YT.Player(frame.id, {
+        events: {
+          onReady: function(){
+            playersReadyCount++;
+            apiReady = playersReadyCount > 0;
+            setActiveVideo(currentVideoIndex, false);
+            if(sectionVisible) startCurrentVideo();
+          },
+          onStateChange: function(event){
+            if(event.data === YT.PlayerState.PLAYING){
+              currentVideoIndex = index;
+              videoCards.forEach(function(card, i){
+                card.classList.toggle('ge-active-video', i === index);
+              });
+              stopOtherVideos(index);
+            }
+
+            if(event.data === YT.PlayerState.PAUSED && sectionVisible && currentVideoIndex === index){
+              userPausedInsideSection = true;
+            }
+
+            if(event.data === YT.PlayerState.ENDED){
+              userPausedInsideSection = false;
+              setActiveVideo(index + 1, true);
+            }
+          }
+        }
+      });
+    });
+
+    setActiveVideo(0, false);
+  }
+
+  function loadYoutubeApi(){
+    if(window.YT && window.YT.Player){ buildPlayers(); return; }
+
+    if(!document.getElementById('youtube-iframe-api')){
+      var tag = document.createElement('script');
+      tag.id = 'youtube-iframe-api';
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+
+    var oldReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = function(){
+      if(typeof oldReady === 'function') oldReady();
+      buildPlayers();
+    };
+  }
+
+  function watchVisibility(){
+    var section = document.getElementById('video');
+    if(!section) return;
+
+    if('IntersectionObserver' in window){
+      var observer = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if(entry.isIntersecting){
+            sectionVisible = true;
+            if(!userPausedInsideSection) startCurrentVideo();
+          } else {
+            sectionVisible = false;
+            userPausedInsideSection = false;
+            stopAllVideos();
+          }
+        });
+      }, { threshold: 0.35 });
+      observer.observe(section);
+    } else {
+      sectionVisible = true;
+      startCurrentVideo();
+    }
+  }
+
+  /* Stop video immediately when user clicks/moves to any other menu section */
+  function stopWhenNavigatingAway(){
+    document.querySelectorAll('a[href^="#"]').forEach(function(link){
+      link.addEventListener('click', function(){
+        var target = link.getAttribute('href');
+        if(target && target !== '#video'){
+          sectionVisible = false;
+          userPausedInsideSection = false;
+          stopAllVideos();
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    loadYoutubeApi();
+    watchVisibility();
+    stopWhenNavigatingAway();
+  });
+})();
